@@ -6,35 +6,49 @@
 #include <Smoothed.h>
 #include <Preferences.h>
 #include <PID_v1.h>
+#include <SPI.h>
 
-#define SDA_PIN         33
-#define SCL_PIN         35
-#define APA102_SDI_PIN  38
-#define APA102_CLK_PIN  37
-#define OLED_RST_PIN    45
-#define CS_MAX1_PIN     13
-#define CS_MAX2_PIN     12
+#define SDA_PIN         12
+#define SCL_PIN         11
+//#define APA102_SDI_PIN  38
+//#define APA102_CLK_PIN  37
+
+//#define CS_MAX1_PIN     13
+#define CS_MAX2_PIN     16 //12
 #define MISO_PIN        9
 #define MOSI_PIN        11
 #define CLK_PIN         7
 
 #define MOS_CTRL1_PIN   5
 #define MOS_CTRL2_PIN   6
-#define SSR1_PIN        1
-#define SSR2_PIN        2
+#define SSR1_PIN        15
+//#define SSR2_PIN        2
 #define SERVO_PIN       3
-#define BUZZER_PIN      15
-#define BTN1_PIN        36
-#define BTN2_PIN        39
-#define BTN3_PIN        40
+#define BUZZER_PIN      19
+#define BTN1_PIN        21
+#define BTN2_PIN        17
+#define BTN3_PIN        18
+ 
+#define DISP_CLK 12
+#define DISP_DATA 11
+#define DISP_CS 13 //10
+#define DISP_DC 10
+#define DISP_RST 14
+#define LED_PIN      15
 
 
 #define NUM_LEDS        1
-CRGB leds[NUM_LEDS];
+//CRGB leds[NUM_LEDS];
 
 #define WIDTH 128
 #define HEIGHT 64
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ OLED_RST_PIN, /* clock=*/ SCL_PIN, /* data=*/ SDA_PIN);
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ DISP_DATA, /* data=*/ DISP_CLK);
+//U8G2_SSD1306_128X64_NONAME_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL_PIN, /* data=*/ SDA_PIN, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL_PIN, /* data=*/ SDA_PIN);
+//U8G2_ST7567_OS12864_1_4W_HW_SPI u8g2(U8G2_R0, DISP_CS, DISP_DC, DISP_RST);   does not work
+//U8G2_ST7567_OS12864_1_4W_SW_SPI u8g2(U8G2_R0, DISP_CLK, DISP_DATA, DISP_CS, DISP_DC, DISP_RST);  
+//U8G2_ST7567_OS12864_1_4W_SW_SPI - used in project
+//U8G2_ST7567_PI_132X64_1_4W_SW_SPI - also works
 
 double pid_setpoint, pid_input, pid_output;
 double Kp = 25, Ki = 0.3, Kd = 0.05;
@@ -51,10 +65,10 @@ const int PWMResolution = 10;                       //12 bits 0-4095
 
 
 MAX6675 thermocouple1(CLK_PIN, CS_MAX2_PIN, MISO_PIN);
-MAX6675 thermocouple2(CLK_PIN, CS_MAX1_PIN, MISO_PIN);
+//MAX6675 thermocouple2(CLK_PIN, CS_MAX1_PIN, MISO_PIN);
 
 float current_temperature1 = 0.0;
-float current_temperature2 = 0.0;
+//float current_temperature2 = 0.0;
 
 float pwm_out1 = 0.0;
 float pwm_out2 = 0.0;
@@ -174,7 +188,6 @@ float val1 = 0.0;
 float placeholder = 0.0;
 String msg2display_top = "";
 String msg2display_bot = "";
-
 display_page page_start_reflow = {"Start Reflow", &placeholder, "Start Reflow", false};
 display_page page_start_const = {"Start Const", &placeholder, "Start Const", false};
 display_page page_select_profile = {"Set Profile", &selected_profile, "", true};
@@ -245,20 +258,33 @@ struct box {
 box top_left = {0, 0, 36, 10, 0, false};
 box top = {top_left.width, 0, 56, 10, 0, false};
 box top_right = {top.left + top.width, 0, top_left.width, 10, 0, false};
-box mid_main = {0, top.height, 128, 34, 0, false};
+box mid_main = {0, top.height, 128, 34, 0, false}; 
 box bot = {0, mid_main.top + mid_main.height, 128, 10, 0, false};
 
 // Update the OLED display with the three boxes according to the given pages
 void update_display(){
+  //static uint8_t tstContrast = 0;
+  //Serial.printf("DU contrast: %d\n",tstContrast);
+  //tstContrast = tstContrast+ 5;
+  //u8g2.setContrast(tstContrast);
+  //Serial.printf("[%09d] DispUpdate c=%d\n",millis(),tstContrast);
+
   u8g2.clearBuffer();
+
   mid_main.draw(false);
 
   if(new_page){
-    if(millis() <= t_new_page + 750) mid_main.print_text(pages[current_page].page.title, font_m, Center, 0.5);
-    else new_page = false;
+    //Serial.printf("[%09d] newPage\n",millis());
+    if(millis() <= t_new_page + 750) {
+      mid_main.print_text(pages[current_page].page.title, font_m, Center, 0.5);
+      //Serial.printf("Title on display:%s\n",pages[current_page].page.title.c_str());
+    }
+    else 
+      new_page = false;
   }
 
   if(!new_page){
+    //Serial.printf("[%09d] NOT newPage\n",millis());
     if(pages[current_page].page.is_value){
       if(current_page == 1){ //set profile page
         mid_main.print_text(String(*pages[current_page].page.value, 0), font_m, Center, 0.5);
@@ -274,40 +300,48 @@ void update_display(){
     }
 
     top_left.print_text(String(current_temperature1, 0) + "C", font_xs, Center, 0.5);
-    top_right.print_text(String(current_temperature2, 0) + "C", font_xs, Center, 0.5);
+    //top_right.print_text(String(current_temperature2, 0) + "C", font_xs, Center, 0.5);
+    //top_right.print_text("t2 C", font_xs, Center, 0.5);
+    //msg2display_bot = "la bot";
+    //msg2display_top = "la top";
     bot.print_text(msg2display_bot, font_xs, Center, 0.5);
     top.print_text(msg2display_top, font_xs, Center, 0.5);
   }
+  
   u8g2.sendBuffer();
 }
 
 
 
 void setup() {
+  delay(3000); //for debug, to catch start on USB CDC UART
+  //pinMode(LED_PIN,OUTPUT);
+  //digitalWrite(LED_PIN,1);
+  
   Serial.begin(115200);
   Serial.println("start");
 
-  pinMode(BTN1_PIN, INPUT);
-  pinMode(BTN2_PIN, INPUT);
-  pinMode(BTN3_PIN, INPUT);
+  pinMode(BTN1_PIN, INPUT_PULLUP);
+  pinMode(BTN2_PIN, INPUT_PULLUP);
+  pinMode(BTN3_PIN, INPUT_PULLUP);
 
-  pinMode(CS_MAX1_PIN, OUTPUT);
+  //pinMode(CS_MAX1_PIN, OUTPUT);
   pinMode(CS_MAX2_PIN, OUTPUT);
-  digitalWrite(CS_MAX1_PIN, LOW);
+  //digitalWrite(CS_MAX1_PIN, LOW);
   digitalWrite(CS_MAX2_PIN, LOW);
 
   pinMode(SSR1_PIN, OUTPUT);
-  pinMode(SSR2_PIN, OUTPUT);
+  //pinMode(SSR2_PIN, OUTPUT);
   digitalWrite(SSR1_PIN, LOW);
-  digitalWrite(SSR2_PIN, LOW);
+  //digitalWrite(SSR2_PIN, LOW);
 
-  delay(100);
-  FastLED.addLeds<APA102, APA102_SDI_PIN, APA102_CLK_PIN, BGR>(leds, NUM_LEDS);
-  FastLED.setBrightness(100);
-  delay(100);
+  //delay(100);
+  //FastLED.addLeds<APA102, APA102_SDI_PIN, APA102_CLK_PIN, BGR>(leds, NUM_LEDS);
+  //FastLED.setBrightness(100);
+  //delay(100);
 
-  leds[0] = CRGB::Black;
-  FastLED.show();
+  //leds[0] = CRGB::Black;
+  //FastLED.show();
 
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
@@ -325,10 +359,11 @@ void setup() {
   read_all_profiles();
 
 
-  Wire.begin(SDA_PIN, SCL_PIN);
+  //Wire.begin(SDA_PIN, SCL_PIN);
   delay(100);
   u8g2.begin();
   delay(100);
+  //u8g2.setContrast(20); //tested on my display
   t_new_page = millis();
   update_display();
 }
@@ -347,9 +382,10 @@ unsigned long t_profile_counter = millis() + 800;
 unsigned long t_reflow_finish = millis() + 900;
 
 void loop() {
-  if(digitalRead(BTN1_PIN) == 1){
-    leds[0] = CRGB::Blue;
-    FastLED.show();
+  if(digitalRead(BTN1_PIN) == 0){
+    Serial.print("BTN1 pressed\n");
+    //leds[0] = CRGB::Blue;
+    //FastLED.show();
     delay(50);
 
     if(pages[current_page].page.is_value){
@@ -365,14 +401,14 @@ void loop() {
     int wait_time_increase = 300;
     bool set_process = false;
 
-    while (digitalRead(BTN1_PIN) == 1){
+    while (digitalRead(BTN1_PIN) == 0){
       if(millis() >= t_btn_pressed + wait_time_increase && !set_process){
         wait_time_increase = 80;
         t_btn_pressed = millis();
 
         if(pages[current_page].page.is_value){
-          leds[0] = CRGB::Orange;
-          FastLED.show();
+          //leds[0] = CRGB::Orange;
+          //FastLED.show();
           if(current_page == 1) {
             if(selected_profile > 0)
               *pages[current_page].page.value = *pages[current_page].page.value - 1.0;
@@ -380,8 +416,8 @@ void loop() {
           else *pages[current_page].page.value = *pages[current_page].page.value - 5.0;
         }
         else{
-          leds[0] = CRGB::Green;
-          FastLED.show();
+         //leds[0] = CRGB::Green;
+         //FastLED.show();
           if(current_page == 0) {
             running_reflow = !running_reflow;
             init_reflow = true;
@@ -398,12 +434,13 @@ void loop() {
       }
       delay(20);
     } 
-    leds[0] = CRGB::Black;
-    FastLED.show();
+   //leds[0] = CRGB::Black;
+   //FastLED.show();
   }
-  else if(digitalRead(BTN2_PIN) == 1){
-    leds[0] = CRGB::Blue;
-    FastLED.show();
+  else if(digitalRead(BTN2_PIN) == 0){
+   Serial.print("BTN2 pressed\n");
+   //leds[0] = CRGB::Blue;
+   //FastLED.show();
     delay(50);
 
     if(pages[current_page].page.is_value){
@@ -419,17 +456,17 @@ void loop() {
     int wait_time_increase = 300;
     bool set_process = false;
     
-    while (digitalRead(BTN2_PIN) == 1){
+    while (digitalRead(BTN2_PIN) == 0){
       if(millis() >= t_btn_pressed + wait_time_increase && !set_process){
-        leds[0] = CRGB::Orange;
-        FastLED.show();
+       //leds[0] = CRGB::Orange;
+       //FastLED.show();
 
         wait_time_increase = 80;
         t_btn_pressed = millis();
 
         if(pages[current_page].page.is_value){
-          leds[0] = CRGB::Orange;
-          FastLED.show();
+         //leds[0] = CRGB::Orange;
+         //FastLED.show();
           if(current_page == 1) {
             if(selected_profile < N_PROFILES-1)
               *pages[current_page].page.value = *pages[current_page].page.value + 1.0;
@@ -437,8 +474,8 @@ void loop() {
           else *pages[current_page].page.value = *pages[current_page].page.value + 5.0;
         }
         else{
-          leds[0] = CRGB::Green;
-          FastLED.show();
+         //leds[0] = CRGB::Green;
+         //FastLED.show();
           if(current_page == 0) {
             running_reflow = !running_reflow;
             init_reflow = true;
@@ -455,29 +492,29 @@ void loop() {
       }
       delay(20);
     } 
-    leds[0] = CRGB::Black;
-    FastLED.show();
+   //leds[0] = CRGB::Black;
+   //FastLED.show();
   }
-  else if(digitalRead(BTN3_PIN) == 1){
-    leds[0] = CRGB::Blue;
-    FastLED.show();
+  else if(digitalRead(BTN3_PIN) == 0){
+  Serial.print("BTN3 pressed\n");
+   //leds[0] = CRGB::Blue;
+   //FastLED.show();
     delay(50);
     t_new_page = millis();
     new_page = true;
     current_page = (++current_page) % N_PAGES;
-    msg2display_bot = "";
     update_display();
 
     unsigned long t_btn_pressed = millis();
-    while (digitalRead(BTN3_PIN) == 1){
+    while (digitalRead(BTN3_PIN) == 0){
       if(millis() >= t_btn_pressed + 800){
-        leds[0] = CRGB::Orange;
-        FastLED.show();
+       //leds[0] = CRGB::Orange;
+       //FastLED.show();
       }
       delay(20);
     } 
-    leds[0] = CRGB::Black;
-    FastLED.show();
+   //leds[0] = CRGB::Black;
+   //FastLED.show();
   }
 
 
@@ -495,14 +532,14 @@ void loop() {
 
       pid_reflow.SetOutputLimits(0, 500);
       pid_reflow.SetMode(AUTOMATIC);
-      leds[0] = CRGB::Yellow;
-      FastLED.show();
+     //leds[0] = CRGB::Yellow;
+     //FastLED.show();
     }
     else{
       msg2display_bot = "";
       digitalWrite(SSR1_PIN, LOW);
-      leds[0] = CRGB::Black;
-      FastLED.show();
+     //leds[0] = CRGB::Black;
+     //FastLED.show();
     }
   }
 
@@ -511,9 +548,10 @@ void loop() {
     if(current_temperature1 < 30){
       if(millis() >= t_reflow_control + 500){
         t_reflow_control = millis();
-        digitalWrite(SSR1_PIN, !digitalRead(SSR1_PIN));
-        leds[0] = digitalRead(SSR1_PIN) ? CRGB::Blue : CRGB::Yellow; 
-        FastLED.show();
+        digitalWrite(SSR1_PIN, HIGH);
+        //digitalWrite(SSR1_PIN, !digitalRead(SSR1_PIN));
+       //leds[0] = digitalRead(SSR1_PIN) ? CRGB::Blue : CRGB::Yellow; 
+       //FastLED.show();
         t_pid_on = millis();
       }
     }
@@ -529,22 +567,22 @@ void loop() {
       t_reflow_finish = millis();
       buzzer_state = !buzzer_state;
       ledcWrite(PWMChannel, buzzer_state ? 500 : 0);
-      leds[0] = CRGB::Green; 
-      FastLED.show();
+     //leds[0] = CRGB::Green; 
+     //FastLED.show();
       msg2display_bot = "Press any button!";
       update_display();
     }
 
-    if(digitalRead(BTN1_PIN) == 1 || digitalRead(BTN2_PIN) == 1 || digitalRead(BTN3_PIN) == 1){
+    if(digitalRead(BTN1_PIN) == 0 || digitalRead(BTN2_PIN) == 0 || digitalRead(BTN3_PIN) == 0){
       reflow_done = false;
       ledcWrite(PWMChannel, 0);
-      leds[0] = CRGB::Black; 
-      FastLED.show();
+     //leds[0] = CRGB::Black; 
+     //FastLED.show();
 
       profile_counter = 0;
       pid_setpoint = temp_reflow_individual[0];
       
-      while(digitalRead(BTN1_PIN) == 1 || digitalRead(BTN2_PIN) == 1 || digitalRead(BTN3_PIN) == 1){ 
+      while(digitalRead(BTN1_PIN) == 0 || digitalRead(BTN2_PIN) == 0 || digitalRead(BTN3_PIN) == 0){ 
         delay(100); 
       }
     }
@@ -568,16 +606,16 @@ void loop() {
       
       if(pid_output > 50){
         digitalWrite(SSR1_PIN, HIGH);
-        leds[0] = CRGB::Red;
-        FastLED.show();
+       //leds[0] = CRGB::Red;
+       //FastLED.show();
         t_pid_on = millis();
       }
     }
 
     if(millis() > t_pid_on + pid_output && digitalRead(SSR1_PIN)){
       digitalWrite(SSR1_PIN, LOW);
-      leds[0] = CRGB::Yellow;
-      FastLED.show();
+     //leds[0] = CRGB::Yellow;
+     //FastLED.show();
     }
 
     if(millis() >= t_profile_counter + 1000){
@@ -591,8 +629,8 @@ void loop() {
         t_reflow_finish = millis();
         reflow_done = true;
         digitalWrite(SSR1_PIN, LOW);
-        leds[0] = CRGB::Yellow;
-        FastLED.show();
+       //leds[0] = CRGB::Yellow;
+       //FastLED.show();
       }
     }
   }
@@ -606,14 +644,14 @@ void loop() {
       rampup_const = true;
       pid.SetOutputLimits(0, 1000);
       pid.SetMode(AUTOMATIC);
-      leds[0] = CRGB::Yellow;
-      FastLED.show();
+     //leds[0] = CRGB::Yellow;
+     //FastLED.show();
     }
     else{
       msg2display_bot = "";
       digitalWrite(SSR1_PIN, LOW);
-      leds[0] = CRGB::Black;
-      FastLED.show();
+     //leds[0] = CRGB::Black;
+     //FastLED.show();
     }
   }
 
@@ -663,16 +701,16 @@ void loop() {
       
       if(pid_output > 50){
         digitalWrite(SSR1_PIN, HIGH);
-        leds[0] = CRGB::Red;
-        FastLED.show();
+       //leds[0] = CRGB::Red;
+       //FastLED.show();
         t_pid_on = millis();
       }
     }
 
     if(millis() > t_pid_on + pid_output && digitalRead(SSR1_PIN)){
       digitalWrite(SSR1_PIN, LOW);
-      leds[0] = CRGB::Yellow;
-      FastLED.show();
+     //leds[0] = CRGB::Yellow;
+     //FastLED.show();
     }
   }
 
@@ -687,7 +725,8 @@ void loop() {
   if(millis() >= t_thermo + 200){
     t_thermo = millis();
     current_temperature1 = thermocouple1.readCelsius();//random(50, 300);//
-    current_temperature2 = thermocouple2.readCelsius();//random(50, 300);//thermocouple2.readCelsius();
+    //current_temperature1 = random(50, 300);//
+    //current_temperature2 = thermocouple2.readCelsius();//random(50, 300);//thermocouple2.readCelsius();
     val1 = float(random(50,300));
   }
 }
